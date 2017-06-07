@@ -1,55 +1,61 @@
 from django.core.urlresolvers import reverse
 from django.db import models
 
-from django.contrib.auth.models import User
+import math
+
 
 class Course(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     title = models.CharField(max_length=255)
     description = models.TextField()
-    teacher = models.ForeignKey(User)
-    subject = models.CharField(default='', max_length=100)
     published = models.BooleanField(default=False)
 
     def __str__(self):
         return self.title
 
+    def time_to_complete(self):
+        from courses.templatetags.course_extras import time_estimate
+        return '{} min.'.format(time_estimate(len(self.description.split())))
+
 
 class Step(models.Model):
     title = models.CharField(max_length=255)
     description = models.TextField()
-
     order = models.IntegerField(default=0)
     course = models.ForeignKey(Course)
-    
+
     class Meta:
         abstract = True
-        ordering = ['order',]
-    
+        ordering = ['order', ]
+
     def __str__(self):
         return self.title
+
 
 class Text(Step):
     content = models.TextField(blank=True, default='')
 
     def get_absolute_url(self):
-        return reverse('courses:text', kwargs={
-            'course_pk': self.course_id,
-            'step_pk': self.id
+        return reverse('courses:text_step', kwargs={
+            'course_pk': self.course.pk,
+            'step_pk': self.pk
         })
 
 
 class Quiz(Step):
-    total_questions = models.IntegerField(default=4)
+    total_questions = models.IntegerField()
 
     class Meta:
-        verbose_name_plural = "Quizzes"
+        verbose_name_plural = "quizzes"
 
     def get_absolute_url(self):
-        return reverse('courses:quiz', kwargs={
-            'course_pk': self.course_id,
-            'step_pk': self.id
+        return reverse('courses:quiz_step', kwargs={
+            'course_pk': self.course.pk,
+            'step_pk': self.pk
         })
+
+    def number_correct_needed(self):
+        return '{}/{}'.format(math.ceil(self.total_questions * 0.7), self.total_questions)
 
 
 class Question(models.Model):
@@ -58,7 +64,7 @@ class Question(models.Model):
     prompt = models.TextField()
 
     class Meta:
-        ordering = ['order',]
+        ordering = ['order', ]
 
     def get_absolute_url(self):
         return self.quiz.get_absolute_url()
@@ -66,11 +72,14 @@ class Question(models.Model):
     def __str__(self):
         return self.prompt
 
+
 class MultipleChoiceQuestion(Question):
     shuffle_answers = models.BooleanField(default=False)
 
+
 class TrueFalseQuestion(Question):
     pass
+
 
 class Answer(models.Model):
     question = models.ForeignKey(Question)
@@ -79,7 +88,7 @@ class Answer(models.Model):
     correct = models.BooleanField(default=False)
 
     class Meta:
-        ordering = ['order',]
+        ordering = ['order']
 
     def __str__(self):
         return self.text
